@@ -12,3 +12,7 @@
   fixed by `.to_dict()` at the handler boundary. Cancel mapping decided as
   plan=free + status=active (downgrade, not block); `past_due` keeps plan with 402.
   Local `.env` holds real test keys (git-ignored, verified via `git check-ignore`).
+- Demo playground: Vite (CLI scaffold) + React Router + Tailwind v4 + shadcn,
+  pnpm only. shadcn CLI wrote components to a literal `@/` dir (alias unresolved) —
+  moved to `src/`. Served via `app.frontend("/demo")`; verified in a real browser:
+  Overview KPIs live, double-send shows twin 200s with `api.used == 1`.

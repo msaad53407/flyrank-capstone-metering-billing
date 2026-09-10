@@ -24,3 +24,7 @@ app.include_router(generate.router, tags=["metering"])
 app.include_router(usage.router, tags=["metering"])
 app.include_router(billing.router, tags=["billing"])
 app.include_router(webhooks.router, tags=["billing"])
+
+# Demo playground (Vite + React build output). API routes always win;
+# build it with `cd frontend && pnpm install && pnpm build` to serve /demo.
+app.frontend("/demo", directory="frontend/dist", check_dir=False)

@@ -1,6 +1,16 @@
 # Multi-stage FastAPI image (uv). No BuildKit-only syntax, builds anywhere.
 # Layer order: lockfiles -> deps -> source, so dependency layers cache well.
 
+# ---------- frontend: build the demo playground (pnpm + Vite), discarded after ----------
+FROM node:22-slim AS frontend-build
+
+WORKDIR /web
+RUN corepack enable
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY frontend/ ./
+RUN pnpm build
+
 # ---------- builder: resolve + install locked deps, byte-compiled ----------
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
@@ -31,6 +41,7 @@ RUN useradd --create-home --shell /bin/bash app
 COPY --from=builder --chown=app:app /code/.venv /code/.venv
 COPY --chown=app:app app ./app
 COPY --chown=app:app scripts ./scripts
+COPY --from=frontend-build --chown=app:app /web/dist ./frontend/dist
 
 USER app
 

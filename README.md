@@ -35,6 +35,21 @@ curl -X POST localhost:8000/generate -H 'Content-Type: application/json' \
 curl 'localhost:8000/usage?tenant_id=00000000-0000-0000-0000-000000000001'
 ```
 
+## Demo playground
+
+Vite + React + Tailwind + shadcn, served by the API itself at `/demo`
+(one image, no extra container, no CORS).
+
+```bash
+cd frontend && pnpm install && pnpm build   # build once to serve from FastAPI
+pnpm dev                                     # or dev server (:5173/demo/, proxies API to :8000)
+```
+
+Dark-first dashboard with sidebar: Overview KPIs + probe-by-probe demo script,
+request builder with double-send, fill-to-quota runner, pricing calculator,
+Checkout launcher, signed/replay/forged webhook composer. Auth nav is a
+placeholder until harness integration.
+
 ## Test
 
 ## Stripe (test mode)
