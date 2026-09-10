@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,6 +16,20 @@ TOTAL_TOKEN_COLS = (
 def current_period() -> date:
     today = date.today()
     return date(today.year, today.month, 1)
+
+
+def seconds_until_reset() -> int:
+    """Seconds until the quota resets (next billing period).
+
+    Monthly quotas don't refill after N seconds, so a fixed Retry-After
+    would lie. This tells the client exactly when a retry can succeed.
+    """
+    now = datetime.now(timezone.utc)
+    if now.month == 12:
+        reset = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        reset = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+    return max(0, int((reset - now).total_seconds()))
 
 
 def api_used(db: Session, tenant_id: str, period: date) -> int:

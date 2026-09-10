@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.schemas import GenerateRequest
-from app.services import metering
+from app.services import metering, quotas
 
 router = APIRouter()
 
@@ -21,5 +21,5 @@ def generate(
     if not tenant_id:
         return JSONResponse(status_code=400, content={"detail": "X-Tenant-ID header is required"})
     code, payload = metering.record(db, tenant_id, idempotency_key, body, actor=f"tenant:{tenant_id}")
-    headers = {"Retry-After": "60"} if code == 429 else {}
+    headers = {"Retry-After": str(quotas.seconds_until_reset())} if code == 429 else {}
     return JSONResponse(status_code=code, content=payload, headers=headers)

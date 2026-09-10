@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import EmailOutbox, Plan, Tenant  # noqa: E402
-from app.services import metering, pricing  # noqa: E402
+from app.services import metering, pricing, quotas  # noqa: E402
 
 if os.path.exists("/tmp/opencode/phase2_test.db"):
     os.remove("/tmp/opencode/phase2_test.db")
@@ -82,7 +82,8 @@ def test_boundary_429_with_message_and_retry_after():
     r = _gen(TINY, "b3", {"type": "api_call", "qty": 1})
     assert r.status_code == 429, r.text
     assert r.json()["used"] == 2 and r.json()["limit"] == 2
-    assert "Retry-After" in r.headers
+    retry_after = int(r.headers["Retry-After"])
+    assert abs(retry_after - quotas.seconds_until_reset()) <= 2 and retry_after > 0
 
 
 def test_past_due_returns_402():
