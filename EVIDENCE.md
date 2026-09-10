@@ -35,6 +35,27 @@ with `Retry-After` header. Past-due tenant returns `402` (`test_past_due_returns
 - 500 output + 500 reasoning -> 60c (reasoning = output)
 - 2000 in + 1000 cached + 500 out + 500 reasoning -> 94c
 
-## Phase 3 — Stripe (pending)
+## Phase 3 — Stripe (test mode)
+
+### Checkout flips Free -> Pro via webhook
+`test_checkout_completed_flips_free_to_pro` — a correctly HMAC-signed
+`checkout.session.completed` (tenant in metadata) flips the tenant to Pro,
+stores the `subscriptions` row + `stripe_customer_id`; `GET /usage` shows
+10k/1M limits. `test_replay_of_same_event_processed_once` reposts it ->
+`{"deduped": true}`, still one subscription row.
+
+### Forged webhook -> 400, nothing changes
+`test_forged_signature_400_nothing_changes` — bad `Stripe-Signature` -> 400,
+plan untouched. Unknown types acked (`test_unknown_event_type_acked`).
+
+### Cancel -> Free
+`test_subscription_deleted_downgrades_to_free` — `customer.subscription.deleted`
+sets plan=free, status=active (downgraded, not blocked).
+
+### Checkout route
+`test_checkout_route_validation` — unknown tenant -> 404; unconfigured keys ->
+503 (never 500, never touches network). Live end-to-end (test card 4242...)
+is manual: `stripe listen --forward-to localhost:8000/webhooks/stripe`,
+complete Checkout, watch the tenant flip.
 
 ## Phase 4 — Cost & finalization (pending)

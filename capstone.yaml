@@ -5,4 +5,6 @@ base_url: http://localhost:8000
 endpoints:
   billable: POST /generate (headers Idempotency-Key, X-Tenant-ID)
   usage: GET /usage?tenant_id=
+  checkout: POST /billing/checkout
+  webhooks: POST /webhooks/stripe
   health: GET /health

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.db import Base, engine
-from app.routers import generate, health, usage
+from app.routers import billing, generate, health, usage, webhooks
 
 
 @asynccontextmanager
@@ -22,3 +22,5 @@ app = FastAPI(title="Usage Metering & Billing Engine", lifespan=lifespan)
 app.include_router(health.router, tags=["ops"])
 app.include_router(generate.router, tags=["metering"])
 app.include_router(usage.router, tags=["metering"])
+app.include_router(billing.router, tags=["billing"])
+app.include_router(webhooks.router, tags=["billing"])

@@ -37,12 +37,20 @@ curl 'localhost:8000/usage?tenant_id=00000000-0000-0000-0000-000000000001'
 
 ## Test
 
+## Stripe (test mode)
+
 ```bash
-uv run pytest tests/ -q
+# .env needs: STRIPE_SECRET_KEY=sk_test_... STRIPE_WEBHOOK_SECRET=whsec_...
+#             STRIPE_PRO_PRICE_ID=price_... (from Product catalog, test mode)
+stripe listen --forward-to localhost:8000/webhooks/stripe
+stripe trigger checkout.session.completed   # or complete a real test Checkout with 4242...
 ```
+
+`POST /billing/checkout {"tenant_id"}` returns a Stripe URL. The webhook flips
+the tenant to Pro; `customer.subscription.deleted` downgrades to Free.
 
 ## Limitations
 
 - Auth is `X-Tenant-ID` header (no users/API keys yet — deferred to harness integration).
 - Schema auto-creates on boot; Alembic migrations land in Phase 4.
-- Stripe integration lands in Phase 3; worker sends via log backend when `SMTP_URL` is unset.
+- Worker sends via log backend when `SMTP_URL` is unset.

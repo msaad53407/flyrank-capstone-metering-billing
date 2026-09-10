@@ -8,3 +8,7 @@
   to integer-safe INPUT=15 / CACHED=4 / OUTPUT=60 per 1K with half-up rounding.
 - Human decisions: tenant-level auth (no users table) for capstone scope; Celery+Redis
   email alerts as the background job instead of nightly rollup; usage_events append-only.
+- Phase 3: Stripe SDK 15.x `construct_event` returns a StripeObject (no `.get()`) —
+  fixed by `.to_dict()` at the handler boundary. Cancel mapping decided as
+  plan=free + status=active (downgrade, not block); `past_due` keeps plan with 402.
+  Local `.env` holds real test keys (git-ignored, verified via `git check-ignore`).
