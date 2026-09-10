@@ -34,13 +34,16 @@ def _send(to_email: str, kind: str, tenant_id: str) -> None:
         smtp.send_message(msg)
 
 
-@celery_app.task(bind=True, max_retries=3)
+@celery_app.task(bind=True, max_retries=3, retry_backoff=30, retry_jitter=True)
 def send_alert_email(self, outbox_id: str):
+    """Delays between attempts: 30s, 60s, 120s (+ jitter). Then gives up."""
     db = SessionLocal()
     try:
         row = db.query(EmailOutbox).filter_by(id=outbox_id).first()
         if row is None or row.status == "sent":
             return "noop"
+        if row.status == "failed":
+            return "gave_up"
         try:
             _send(row.to_email, row.kind, row.tenant_id)
         except Exception as exc:  # noqa: BLE001 — retry then persist failure

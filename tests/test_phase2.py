@@ -1,6 +1,7 @@
 """Phase 2 gate: same key twice -> one event; boundary -> 429/402."""
 
 import os
+from datetime import date
 
 import pytest
 
@@ -100,6 +101,37 @@ def test_pricing_cached_cheaper_reasoning_is_output():
     assert pricing.token_cost_cents(0, 1000, 0, 0) == 4  # cached cheaper
     assert pricing.token_cost_cents(0, 0, 500, 500) == 60  # reasoning = output
     assert pricing.token_cost_cents(2000, 1000, 500, 500) == 94
+
+
+def test_retry_policy_is_exponential_backoff_with_jitter():
+    from app.worker.tasks import send_alert_email
+
+    assert send_alert_email.max_retries == 3
+    assert send_alert_email.retry_backoff is True or send_alert_email.retry_backoff == 30
+    assert send_alert_email.retry_jitter is True
+
+
+def test_failed_row_is_not_retried():
+    from app.worker.tasks import send_alert_email
+
+    db = SessionLocal()
+    try:
+        row = EmailOutbox(tenant_id=DEMO, billing_period=date(2026, 9, 1),
+                          kind="blocked_100", to_email="t@example.com", status="failed")
+        # unique (tenant, period, kind) may already exist from earlier tests; reuse it
+        existing = db.query(EmailOutbox).filter_by(
+            tenant_id=DEMO, billing_period=date(2026, 9, 1), kind="blocked_100").first()
+        target = existing or row
+        if existing is None:
+            db.add(row)
+            db.commit()
+            target = row
+        else:
+            existing.status = "failed"
+            db.commit()
+        assert send_alert_email.run(target.id) == "gave_up"
+    finally:
+        db.close()
 
 
 def test_warn_80_enqueues_outbox_and_dispatches_fast_path(_stub_celery_delay):
