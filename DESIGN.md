@@ -29,8 +29,10 @@ Money: integers only (`cost_cents`). `pricing_version` per event for reproducibl
 `routers/ (validation, 4xx never 500) -> services/ (MeterService.record, QuotaService.check, PricingService.calc, StripeService.sync, AlertService.maybe_enqueue) -> repos/ (SQLAlchemy) -> Postgres`, plus `worker/ (Celery + Redis broker) -> SMTP`.
 Background job (shared req #3): event-driven usage-alert emails, not nightly rollup. `POST /generate` commits usage, then enqueues `email_outbox` row when `used/limit >= 0.8` (`warn_80`) or on block (`blocked_100`); Celery task `send_alert_email` polls `status='pending'`, sends via `SMTP_URL`, `pending -> sent/failed` with 3x exponential backoff. Failure stays in table + error log = failure alert. Request path never sends mail. Local $0 delivery: Mailpit container; unset `SMTP_URL` falls back to log backend so one-command run still passes. Compose: `api + worker + beat + redis + postgres (+ mailpit)`. Migrations: Alembic. Secrets via `.env` only.
 
-## 5. Pricing constants (v1, pinned in config)
-`INPUT_PER_1K=0.15c, CACHED_INPUT_PER_1K=0.04c, OUTPUT_PER_1K=0.60c, REASONING=OUTPUT`. `cost = input*P_in + cached*P_cached + (output+reasoning)*P_out`. Categories never summed as raw tokens. `GET /usage` uses same function; proof vectors in `EVIDENCE.md` Phase 4.
+## 5. Pricing constants (v1, pinned in `app/config.py`)
+Integer cents per 1K tokens: `INPUT=15, CACHED_INPUT=4, OUTPUT=60, REASONING=OUTPUT`; `API_CALL=1c` each.
+`cost = (input*15 + cached*4 + (output+reasoning)*60 + 500) // 1000` (round half-up, ints only).
+Categories never summed as raw tokens. `GET /usage` uses same function; proof vectors in `EVIDENCE.md` Phase 4.
 
 ## 6. Non-goal (+ deferred)
 No invoicing, proration, overage billing, nightly rollup (deferred; alerts cover the job req, rollup only if `GET /usage` gets slow). Stripe reconciliation stays stretch. **Deferred: `users` / memberships / api_keys.** Capstone auth stays `X-Tenant-ID`; tenant = billing boundary.
