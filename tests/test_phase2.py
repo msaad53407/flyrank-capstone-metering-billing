@@ -2,18 +2,33 @@
 
 import os
 
+import pytest
+
 os.environ["DATABASE_URL"] = "sqlite:////tmp/opencode/phase2_test.db"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import Plan, Tenant  # noqa: E402
-from app.services import pricing  # noqa: E402
+from app.models import EmailOutbox, Plan, Tenant  # noqa: E402
+from app.services import metering, pricing  # noqa: E402
 
 if os.path.exists("/tmp/opencode/phase2_test.db"):
     os.remove("/tmp/opencode/phase2_test.db")
 
 from app.main import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stub_celery_delay(monkeypatch):
+    """No Redis in tests: capture .delay() calls instead of sending them."""
+    calls = []
+
+    class FakeTask:
+        def delay(self, outbox_id):
+            calls.append(outbox_id)
+
+    monkeypatch.setattr(metering, "send_alert_email", FakeTask())
+    return calls
 
 client = TestClient(app)
 
@@ -85,3 +100,15 @@ def test_pricing_cached_cheaper_reasoning_is_output():
     assert pricing.token_cost_cents(0, 1000, 0, 0) == 4  # cached cheaper
     assert pricing.token_cost_cents(0, 0, 500, 500) == 60  # reasoning = output
     assert pricing.token_cost_cents(2000, 1000, 500, 500) == 94
+
+
+def test_warn_80_enqueues_outbox_and_dispatches_fast_path(_stub_celery_delay):
+    r = _gen(DEMO, "warn-80-key", {"type": "ai_tokens", "input_tokens": 80000})
+    assert r.status_code == 200, r.text
+    assert len(_stub_celery_delay) == 1
+    db = SessionLocal()
+    try:
+        row = db.query(EmailOutbox).filter_by(id=_stub_celery_delay[0]).one()
+        assert row.kind == "warn_80" and row.status == "pending"
+    finally:
+        db.close()

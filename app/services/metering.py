@@ -6,6 +6,7 @@ Concurrent duplicate inserts collapse via UNIQUE(tenant_id, idempotency_key).
 
 import hashlib
 import json
+import logging
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -13,6 +14,9 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.services import alerts, pricing, quotas
+from app.worker.tasks import send_alert_email
+
+log = logging.getLogger(__name__)
 
 
 def _request_hash(body) -> str:
@@ -27,6 +31,19 @@ def _limits(db: Session, plan_id: str) -> tuple[int, int]:
     if plan_id == "pro":
         return settings.pro_api_limit, settings.pro_token_limit
     return settings.free_api_limit, settings.free_token_limit
+
+
+def _dispatch_alert(outbox_id: str | None) -> None:
+    """Best-effort fast path, called AFTER commit so the worker can see the row.
+
+    Never fails the request: if Redis is down, the beat sweep is the backstop.
+    """
+    if not outbox_id:
+        return
+    try:
+        send_alert_email.delay(outbox_id)
+    except Exception:  # noqa: BLE001
+        log.warning("celery delay failed for outbox %s; beat sweep will retry", outbox_id)
 
 
 def _replay(db: Session, tenant_id: str, key: str, req_hash: str):
@@ -83,9 +100,10 @@ def record(db: Session, tenant_id: str, key: str, body, actor: str):
             "used": used,
             "limit": limit,
         }
-        alerts.maybe_enqueue(db, tenant, period, ratio=1.0, blocked=True)
+        outbox_id = alerts.maybe_enqueue(db, tenant, period, ratio=1.0, blocked=True)
         _store_receipt(db, tenant_id, key, "POST /generate", req_hash, code, payload)
         db.commit()
+        _dispatch_alert(outbox_id)
         return code, payload
 
     cost = pricing.event_cost_cents(
@@ -118,8 +136,9 @@ def record(db: Session, tenant_id: str, key: str, body, actor: str):
         }
         _store_receipt(db, tenant_id, key, "POST /generate", req_hash, 200, payload)
         ratio = (used + requested) / limit if limit else 1.0
-        alerts.maybe_enqueue(db, tenant, period, ratio=ratio, blocked=False)
+        outbox_id = alerts.maybe_enqueue(db, tenant, period, ratio=ratio, blocked=False)
         db.commit()
+        _dispatch_alert(outbox_id)
         return 200, payload
     except IntegrityError:
         db.rollback()

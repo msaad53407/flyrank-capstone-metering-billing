@@ -4,9 +4,15 @@
 
 ### Metering: same request twice -> exactly one usage event
 `uv run pytest tests/test_phase2.py::test_idempotent_metering_same_key_twice_one_event -q`
-Result: `6 passed` (full file). The test posts `POST /generate` twice with
+Result: `7 passed` (full file). The test posts `POST /generate` twice with
 `Idempotency-Key: gate-key-1`, asserts both `200` with identical bodies and
 `GET /usage` shows `api.used == 1`.
+
+### Alerts: warn_80 enqueues + fast-path dispatch, sweep is backstop
+`test_warn_80_enqueues_outbox_and_dispatches_fast_path` — an 80k-token request
+(ratio 0.8) inserts a `pending warn_80` row and calls `send_alert_email.delay`
+after commit. `.delay()` is wrapped so Redis downtime never fails the request;
+the beat sweep re-queues anything stuck.
 
 ### Metering: key reuse with different payload -> 422
 `test_key_reuse_different_payload_rejected` — same key, different body returns `422`.
