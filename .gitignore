@@ -1,5 +1,6 @@
 # never commit secrets
 .env
+docker-compose.local.yml
 .venv/
 __pycache__/
 *.pyc

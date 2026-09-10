@@ -16,3 +16,7 @@
   pnpm only. shadcn CLI wrote components to a literal `@/` dir (alias unresolved) —
   moved to `src/`. Served via `app.frontend("/demo")`; verified in a real browser:
   Overview KPIs live, double-send shows twin 200s with `api.used == 1`.
+- Compose verified end-to-end (all healthy): beat needed `--schedule /tmp/...`
+  (non-root `app` can't write /code); worker got a real `celery inspect ping`
+  healthcheck. Sandbox-only `docker-compose.local.yml` (host-net builds) is
+  gitignored — committed files stay portable.
