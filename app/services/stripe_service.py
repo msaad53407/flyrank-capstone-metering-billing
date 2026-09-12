@@ -20,8 +20,8 @@ def create_checkout_session(tenant) -> dict:
     kwargs: dict = {
         "mode": "subscription",
         "line_items": [{"price": settings.stripe_pro_price_id, "quantity": 1}],
-        "success_url": f"{settings.app_base_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
-        "cancel_url": f"{settings.app_base_url}/billing/cancel",
+        "success_url": f"{settings.app_base_url}/demo/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+        "cancel_url": f"{settings.app_base_url}/demo/billing",
         "client_reference_id": tenant.id,
         "metadata": {"tenant_id": tenant.id},
     }

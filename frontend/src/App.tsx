@@ -59,6 +59,7 @@ export default function App() {
             <Route path="quotas" element={<Quotas />} />
             <Route path="pricing" element={<Pricing />} />
             <Route path="billing" element={<Billing />} />
+            <Route path="billing/success" element={<Billing />} />
             <Route path="webhooks" element={<Webhooks />} />
             <Route path="auth" element={<AuthSoon />} />
             <Route path="*" element={<Overview />} />
