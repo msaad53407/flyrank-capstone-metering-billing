@@ -3,7 +3,8 @@ import {
   CreditCard,
   Gauge,
   LayoutDashboard,
-  Lock,
+  LogIn,
+  LogOut,
   Moon,
   RotateCw,
   Sun,
@@ -20,21 +21,33 @@ import { Separator } from "@/components/ui/separator";
 import { useShell } from "@/lib/shell-context";
 import { cn } from "cn";
 
-const NAV: { to: string; label: string; icon: typeof Zap; disabled?: boolean }[] = [
+const NAV: {
+  to: string;
+  label: string;
+  icon: typeof Zap;
+  disabled?: boolean;
+}[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/metering", label: "Metering", icon: Zap },
   { to: "/quotas", label: "Quotas", icon: Gauge },
   { to: "/pricing", label: "Pricing", icon: Calculator },
   { to: "/billing", label: "Billing", icon: CreditCard },
   { to: "/webhooks", label: "Webhooks", icon: Webhook },
-  { to: "/auth", label: "Auth", icon: Lock, disabled: true },
 ];
 
 export function Layout() {
   const { theme, setTheme } = useTheme();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { tenantId, onTenantChange, idempotencyKey, onRegenerateKey, backendUp } = useShell();
+  const {
+    tenantId,
+    onTenantChange,
+    idempotencyKey,
+    onRegenerateKey,
+    backendUp,
+    currentTenant,
+    onLogout,
+  } = useShell();
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -45,7 +58,9 @@ export function Layout() {
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">Metering</p>
-            <p className="mt-1 text-xs text-muted-foreground">billing playground</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              billing playground
+            </p>
           </div>
         </div>
         <nav className="flex flex-col gap-1 px-3 py-5">
@@ -62,11 +77,6 @@ export function Layout() {
               >
                 <Icon className="size-4" />
                 {item.label}
-                {item.disabled && (
-                  <Badge variant="outline" className="ml-auto text-[10px]">
-                    later
-                  </Badge>
-                )}
               </Button>
             );
           })}
@@ -85,7 +95,11 @@ export function Layout() {
               )}
             />
             <span className="text-muted-foreground">
-              {backendUp === null ? "checking backend…" : backendUp ? "backend connected" : "backend down"}
+              {backendUp === null
+                ? "checking backend…"
+                : backendUp
+                  ? "backend connected"
+                  : "backend down"}
             </span>
           </div>
           <Button
@@ -94,7 +108,11 @@ export function Layout() {
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             aria-label="Toggle theme"
           >
-            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {theme === "dark" ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
           </Button>
         </div>
       </aside>
@@ -102,17 +120,34 @@ export function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-col gap-3 border-b border-border bg-card/50 px-4 py-3 backdrop-blur lg:flex-row lg:items-end">
           <div className="min-w-0 flex-1">
-            <Label htmlFor="tenant" className="text-xs text-muted-foreground">
-              X-Tenant-ID
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="tenant" className="text-xs text-muted-foreground">
+                Active Tenant ID
+              </Label>
+              {currentTenant ? (
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="text-foreground font-medium">
+                    {currentTenant.name}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="px-1.5 py-0 text-[10px] capitalize"
+                  >
+                    {currentTenant.plan_id}
+                  </Badge>
+                </div>
+              ) : null}
+            </div>
             <Input
               id="tenant"
               value={tenantId}
               onChange={(e) => onTenantChange(e.target.value)}
               className="mt-1 font-mono text-xs"
               spellCheck={false}
+              readOnly
             />
           </div>
+
           <div className="min-w-0 flex-1">
             <Label htmlFor="idem-key" className="text-xs text-muted-foreground">
               Idempotency-Key
@@ -125,12 +160,44 @@ export function Layout() {
                 className="font-mono text-xs"
                 spellCheck={false}
               />
-              <Button variant="outline" size="icon" onClick={onRegenerateKey} title="Generate new key">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onRegenerateKey}
+                title="Generate new key"
+              >
                 <RotateCw className="size-4" />
               </Button>
             </div>
           </div>
+
+          <div className="shrink-0 flex items-center gap-2 self-end pb-0.5">
+            {currentTenant ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onLogout();
+                  void navigate("/sign-in");
+                }}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                title="Sign out of current tenant session"
+              >
+                <LogOut className="size-3.5" /> Sign Out
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => void navigate("/sign-in")}
+                className="gap-1.5 text-xs"
+              >
+                <LogIn className="size-3.5" /> Sign In / Demo
+              </Button>
+            )}
+          </div>
         </header>
+
         <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-4 lg:p-6">
           <Outlet />
         </main>

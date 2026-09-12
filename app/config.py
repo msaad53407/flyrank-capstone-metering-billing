@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_pro_price_id: str = ""
 
+    # Auth & JWT
+    jwt_secret_key: str = "flyrank-super-secret-jwt-key-2026"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+
     # Plans + quotas (documented, Phase 1)
     free_api_limit: int = 1000
     free_token_limit: int = 100000

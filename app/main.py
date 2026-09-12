@@ -5,7 +5,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 
-from app.routers import billing, generate, health, usage, webhooks
+from app.routers import auth, billing, generate, health, usage, webhooks
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Usage Metering & Billing Engine", lifespan=lifespan)
 
 app.include_router(health.router, tags=["ops"])
+app.include_router(auth.router, tags=["auth"])
 app.include_router(generate.router, tags=["metering"])
 app.include_router(usage.router, tags=["metering"])
 app.include_router(billing.router, tags=["billing"])

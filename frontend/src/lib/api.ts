@@ -30,7 +30,45 @@ export interface ApiResult {
   headers: Record<string, string>;
 }
 
+export interface TenantInfo {
+  id: string;
+  name: string;
+  email: string;
+  plan_id: string;
+  status: string;
+}
+
+export interface AuthResult {
+  access_token: string;
+  token_type: string;
+  tenant: TenantInfo;
+}
+
 export const DEMO_TENANT = "00000000-0000-0000-0000-000000000001";
+export const DEMO_EMAIL = "demo@example.com";
+export const DEMO_PASSWORD = "demo123";
+
+const AUTH_TOKEN_KEY = "flyrank_auth_token";
+
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -57,6 +95,43 @@ async function toResult(res: Response): Promise<ApiResult> {
   return { status: res.status, body, headers };
 }
 
+export async function postRegister(name: string, email: string, password: string): Promise<ApiResult> {
+  const res = await fetch("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password }),
+  });
+  return toResult(res);
+}
+
+export async function postLogin(email: string, password: string): Promise<ApiResult> {
+  const res = await fetch("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  return toResult(res);
+}
+
+export async function postDemoLogin(): Promise<ApiResult> {
+  const res = await fetch("/auth/demo-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return toResult(res);
+}
+
+export async function fetchMe(): Promise<TenantInfo> {
+  const res = await fetch("/auth/me", {
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error((err as { detail?: string }).detail ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as TenantInfo;
+}
+
 export async function postGenerate(
   tenantId: string,
   key: string,
@@ -68,6 +143,7 @@ export async function postGenerate(
       "Content-Type": "application/json",
       "X-Tenant-ID": tenantId,
       "Idempotency-Key": key,
+      ...authHeaders(),
     },
     body: JSON.stringify(body),
   });
@@ -75,7 +151,11 @@ export async function postGenerate(
 }
 
 export async function fetchUsage(tenantId: string): Promise<UsageResponse> {
-  const res = await fetch(`/usage?tenant_id=${encodeURIComponent(tenantId)}`);
+  const res = await fetch(`/usage?tenant_id=${encodeURIComponent(tenantId)}`, {
+    headers: {
+      ...authHeaders(),
+    },
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error((err as { detail?: string }).detail ?? `HTTP ${res.status}`);
@@ -86,7 +166,10 @@ export async function fetchUsage(tenantId: string): Promise<UsageResponse> {
 export async function postCheckout(tenantId: string): Promise<ApiResult> {
   const res = await fetch("/billing/checkout", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
     body: JSON.stringify({ tenant_id: tenantId }),
   });
   return toResult(res);
@@ -98,6 +181,7 @@ export async function postWebhookEvent(raw: string, signature: string): Promise<
     headers: {
       "Content-Type": "application/json",
       "Stripe-Signature": signature,
+      ...authHeaders(),
     },
     body: raw,
   });

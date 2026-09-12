@@ -50,7 +50,8 @@ class Tenant(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    contact_email: Mapped[str] = mapped_column(String(256), nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(256), index=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
     plan_id: Mapped[str] = mapped_column(String(16), ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)

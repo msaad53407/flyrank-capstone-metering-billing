@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.auth import get_optional_current_tenant
 from app.db import get_db
+from app.models import Tenant
 from app.schemas import GenerateRequest
 from app.services import metering, quotas
 
@@ -15,11 +17,13 @@ def generate(
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    current_tenant: Tenant | None = Depends(get_optional_current_tenant),
 ):
     if not idempotency_key:
         return JSONResponse(status_code=400, content={"detail": "Idempotency-Key header is required"})
-    if not tenant_id:
+    resolved_tenant_id = tenant_id or (current_tenant.id if current_tenant else None)
+    if not resolved_tenant_id:
         return JSONResponse(status_code=400, content={"detail": "X-Tenant-ID header is required"})
-    code, payload = metering.record(db, tenant_id, idempotency_key, body, actor=f"tenant:{tenant_id}")
+    code, payload = metering.record(db, resolved_tenant_id, idempotency_key, body, actor=f"tenant:{resolved_tenant_id}")
     headers = {"Retry-After": str(quotas.seconds_until_reset())} if code == 429 else {}
     return JSONResponse(status_code=code, content=payload, headers=headers)
