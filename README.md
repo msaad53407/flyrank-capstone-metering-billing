@@ -6,15 +6,27 @@ quota enforcement (429/402), integer money math, Stripe test-mode sync (Phase 3)
 ## Architecture
 
 ```
-Client --X-Tenant-ID/Idempotency-Key--> POST /generate
-  -> MeterService.record: replay? -> quota check -> insert usage_event + receipt (atomic)
-  -> over limit? 429 (Retry-After) / lapsed? 402 / ok? 200 + enqueue alert?
-GET /usage <- rollup(usage_events) -> {used, limit, cost_cents}
-Celery worker (Redis broker) <- email_outbox -- sends 80%/100% alerts via SMTP
-Stripe Checkout/test webhooks -> Phase 3
+                    ┌─────────────────────────────────────────────────┐
+                    │                   api (:8000)                    │
+                    │  routers/ → services/ → SQLAlchemy → Postgres   │
+                    │  POST /generate · GET /usage · /billing · /demo │
+                    └───────┬─────────────────────────────┬───────────┘
+                            │ usage rows                  │ alert rows
+                            ▼                             ▼
+  Stripe Checkout ──► /webhooks/stripe ──►   Postgres ◄── email_outbox ──► worker ──SMTP──► Mailpit
+  (test mode)        verify→dedupe→sync      tenants/plans/  (Celery+Redis)  :1025  (:8025 UI)
+                     Free ⇄ Pro              subscriptions/                        ▲
+                                             usage_events                          │ sweep q5m
+                                             (Alembic migrations) ── beat ─────────┘
 ```
 
-Layers: `routers/ -> services/ -> repos(SQLAlchemy) -> Postgres`. Pricing pinned in `app/config.py`.
+Money is integer cents only; `usage_events` is append-only; every retry path is
+idempotent (metering keys, webhook event ids, outbox unique kinds). Pricing pinned
+in `app/config.py` (v1: INPUT 15 / CACHED 4 / OUTPUT 60 per 1K, reasoning = output).
+
+Layers: `routers/ (validation, 4xx never 500) → services/ (MeterService, QuotaService,
+PricingService, StripeService, AlertService) → Postgres`. One background job plane
+(Celery worker + beat) off the request path, retries with exponential backoff.
 
 ## Run
 
@@ -52,6 +64,11 @@ placeholder until harness integration.
 
 ## Test
 
+```bash
+uv run pytest tests/ -q              # 15 tests: idempotency, quotas, pricing, webhooks
+uv run alembic upgrade head          # schema migrations (also run on boot)
+```
+
 ## Stripe (test mode)
 
 ```bash
@@ -67,5 +84,5 @@ the tenant to Pro; `customer.subscription.deleted` downgrades to Free.
 ## Limitations
 
 - Auth is `X-Tenant-ID` header (no users/API keys yet — deferred to harness integration).
-- Schema auto-creates on boot; Alembic migrations land in Phase 4.
+- Schema is owned by Alembic migrations (`alembic/versions`), applied on boot.
 - Worker sends via log backend when `SMTP_URL` is unset.

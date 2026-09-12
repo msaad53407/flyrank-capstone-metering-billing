@@ -1,18 +1,27 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 
-from app.db import Base, engine
 from app.routers import billing, generate, health, usage, webhooks
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _migrate() -> None:
+    """Migrations own the schema (shared req: real persistence)."""
+    cfg = Config(str(ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(ROOT / "alembic"))
+    command.upgrade(cfg, "head")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Phase 2: create tables if missing. Alembic migrations own schema from Phase 4.
-    from app import models  # noqa: F401
     from scripts.seed import seed
 
-    Base.metadata.create_all(bind=engine)
+    _migrate()
     seed()
     yield
 

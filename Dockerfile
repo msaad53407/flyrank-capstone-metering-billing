@@ -26,6 +26,8 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY app ./app
 COPY scripts ./scripts
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 
 # ---------- runtime: slim, no uv, no build tools, non-root ----------
 FROM python:3.12-slim-bookworm AS runtime
@@ -41,6 +43,8 @@ RUN useradd --create-home --shell /bin/bash app
 COPY --from=builder --chown=app:app /code/.venv /code/.venv
 COPY --chown=app:app app ./app
 COPY --chown=app:app scripts ./scripts
+COPY --chown=app:app alembic.ini ./alembic.ini
+COPY --chown=app:app alembic ./alembic
 COPY --from=frontend-build --chown=app:app /web/dist ./frontend/dist
 
 USER app

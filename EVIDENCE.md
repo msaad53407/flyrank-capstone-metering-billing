@@ -18,7 +18,8 @@ the beat sweep re-queues anything stuck.
 `test_retry_policy_is_exponential_backoff_with_jitter` pins
 `max_retries=3, retry_backoff=30, retry_jitter=True` → waits ~30s, 60s, 120s.
 `test_failed_row_is_not_retried` proves a `failed` row returns `gave_up`
-instead of sending again. Client-side, `429` carries `Retry-After: 60`;
+instead of sending again. Client-side, `429` carries a dynamic `Retry-After`
+(seconds until the next billing period);
 concurrent duplicate writes collapse on `UNIQUE(tenant_id, idempotency_key)`.
 
 ### Metering: key reuse with different payload -> 422
@@ -58,4 +59,31 @@ sets plan=free, status=active (downgraded, not blocked).
 is manual: `stripe listen --forward-to localhost:8000/webhooks/stripe`,
 complete Checkout, watch the tenant flip.
 
-## Phase 4 — Cost & finalization (pending)
+## Phase 4 — Cost & finalization
+
+### Migrations own the schema
+`alembic/versions/ad88ab7ed361_*` creates all 8 tables + indexes.
+`uv run alembic upgrade head` on a scratch DB yields byte-identical tables to
+the models (`match: True` check), and API boot runs `upgrade head` before seed.
+`uv run pytest tests/ -q` → 15 passed through that path.
+
+### Background job, end to end on compose
+Live stack proof: one 80k-token request (80k/100k) → `email_outbox` row
+`warn_80|sent`, and Mailpit (`:8025/api/v1/messages`) holds 1 message to
+`demo@example.com`, subject `Usage alert: 80% of quota reached`. Fast-path
+`.delay()` after commit; beat sweep every 300s as backstop; 30/60/120s
+exponential backoff + jitter, then `failed`.
+
+### Data model, tests & docs
+Tables: tenants, plans, subscriptions, usage_events (append-only),
+stripe_events, idempotency_records, email_outbox, job_runs; tenant FKs
+`ON DELETE RESTRICT`, partial uniques on soft-deleted rows. Required files
+present: README (arch diagram, run + seed, limitations), capstone.yaml,
+EVIDENCE.md, BUILDLOG.md, .env.example (placeholders only).
+
+### Shared requirements
+Layered (routers/services/SQLAlchemy) · boundary validation (4xx, never 500;
+Stripe failures → 502/503) · Celery+beat job with retries + `job_runs` audit ·
+Alembic migrations + indexes + tenant isolation · idempotency everywhere retries
+happen · secrets in env only (`git grep` shows placeholders/test values, `.env`
+git-ignored) · integer-cent money math, no AI spend.
